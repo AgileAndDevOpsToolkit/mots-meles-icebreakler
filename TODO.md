@@ -1,0 +1,1 @@
+- Option "sens de la lecture". Case à cocher : sens de la lecture (de gauche à droite ou de haut en bas)
