@@ -3,6 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="description" content="Générateur interactif de grilles de mots mêlés, utilisable directement dans le navigateur." />
   <title>Générateur de mots mêlés</title>
   <style>
     :root {
@@ -16,6 +17,7 @@
       --danger: #b42318;
       --success: #067647;
       --warning: #b54708;
+      --selected: #fef0c7;
       --cell: 34px;
     }
 
@@ -23,11 +25,14 @@
 
     body {
       margin: 0;
+      min-height: 100vh;
       font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
       background: var(--bg);
       color: var(--text);
       line-height: 1.5;
     }
+
+    body.modal-open { overflow: hidden; }
 
     header {
       padding: 32px 20px 16px;
@@ -48,10 +53,10 @@
     }
 
     main {
-      width: min(1180px, calc(100% - 32px));
-      margin: 0 auto 48px;
+      width: min(1220px, calc(100% - 32px));
+      margin: 0 auto 32px;
       display: grid;
-      grid-template-columns: minmax(280px, 420px) 1fr;
+      grid-template-columns: minmax(300px, 430px) 1fr;
       gap: 24px;
       align-items: start;
     }
@@ -69,7 +74,8 @@
       top: 16px;
     }
 
-    .controls h2, .result h2 {
+    .controls h2,
+    .result h2 {
       margin: 0 0 16px;
       font-size: 1.25rem;
     }
@@ -88,7 +94,7 @@
       padding: 0;
     }
 
-    label {
+    label.field-label {
       display: block;
       margin: 18px 0 8px;
       font-weight: 700;
@@ -111,6 +117,12 @@
       box-shadow: 0 0 0 4px rgba(37, 99, 235, 0.14);
     }
 
+    .input-hint {
+      margin: 7px 0 0;
+      color: var(--muted);
+      font-size: 0.83rem;
+    }
+
     .drop-zone {
       border: 2px dashed var(--border);
       border-radius: 14px;
@@ -123,6 +135,11 @@
     }
 
     .drop-zone strong { color: var(--text); }
+
+    .drop-zone:focus-visible {
+      outline: 3px solid rgba(37, 99, 235, 0.28);
+      outline-offset: 3px;
+    }
 
     .drop-zone.dragover {
       border-color: var(--primary);
@@ -137,6 +154,39 @@
       min-height: 1.25rem;
     }
 
+    .options {
+      margin-top: 18px;
+      padding: 12px 14px;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      display: grid;
+      gap: 11px;
+      background: #fcfcfd;
+    }
+
+    .option {
+      display: grid;
+      grid-template-columns: auto 1fr;
+      gap: 10px;
+      align-items: start;
+      cursor: pointer;
+      font-weight: 650;
+    }
+
+    .option input {
+      width: 18px;
+      height: 18px;
+      margin: 3px 0 0;
+      accent-color: var(--primary);
+    }
+
+    .option small {
+      display: block;
+      color: var(--muted);
+      font-weight: 500;
+      line-height: 1.35;
+    }
+
     .actions {
       display: flex;
       gap: 10px;
@@ -148,12 +198,18 @@
       border: 0;
       border-radius: 999px;
       padding: 11px 16px;
+      font: inherit;
       font-weight: 800;
       cursor: pointer;
       transition: transform 0.15s, background 0.15s, opacity 0.15s;
     }
 
     button:hover { transform: translateY(-1px); }
+
+    button:focus-visible {
+      outline: 3px solid rgba(37, 99, 235, 0.28);
+      outline-offset: 2px;
+    }
 
     button:disabled {
       cursor: not-allowed;
@@ -241,30 +297,59 @@
       text-transform: uppercase;
     }
 
-    .puzzle-subtitle {
+    .puzzle-subtitle,
+    .progress {
       text-align: center;
       color: var(--muted);
-      margin: 0 0 20px;
+      margin: 0;
       font-weight: 650;
+    }
+
+    .progress {
+      margin-top: 5px;
+      color: var(--success);
+    }
+
+    .grid-instructions {
+      max-width: 760px;
+      margin: 13px auto 16px;
+      text-align: center;
+      color: var(--muted);
+      font-size: 0.9rem;
+    }
+
+    .words-visibility-control {
+      display: flex;
+      justify-content: center;
+      margin: 12px 0 4px;
+    }
+
+    .words-visibility-control button {
+      padding: 9px 14px;
+      font-size: 0.9rem;
     }
 
     .grid-wrap {
       display: flex;
       justify-content: center;
-      overflow-x: auto;
+      overflow: auto;
       padding: 6px 0 10px;
+      overscroll-behavior: contain;
     }
 
     .word-grid {
       border-collapse: collapse;
       background: white;
       border: 2px solid #111827;
+      touch-action: none;
+      cursor: crosshair;
     }
 
     .word-grid td {
       width: var(--cell);
       height: var(--cell);
       min-width: var(--cell);
+      padding: 0;
       border: 1px solid #111827;
       text-align: center;
       vertical-align: middle;
@@ -272,11 +357,41 @@
       font-weight: 900;
       font-size: 1.05rem;
       user-select: none;
+      transition: background-color 0.12s, color 0.12s, transform 0.12s;
     }
 
-    .solution-on .word-grid td.solution {
+    .word-grid td.selecting {
+      background: var(--selected);
+      color: #93370d;
+    }
+
+    .word-grid td.found {
+      background: #abefc6;
+      color: #05603a;
+    }
+
+    .solution-on .word-grid td.solution:not(.found) {
       background: #dbeafe;
       color: #1d4ed8;
+    }
+
+    .word-grid td.invalid-selection {
+      animation: invalid-flash 0.55s ease;
+    }
+
+    .word-grid td.found-animation {
+      animation: found-pop 0.65s ease;
+    }
+
+    @keyframes invalid-flash {
+      0%, 100% { background: white; color: inherit; }
+      30%, 70% { background: #fecdca; color: #912018; }
+    }
+
+    @keyframes found-pop {
+      0% { transform: scale(1); }
+      45% { transform: scale(1.18); background: #75e0a7; }
+      100% { transform: scale(1); }
     }
 
     .words-to-find {
@@ -303,9 +418,101 @@
     }
 
     .word-list li::before {
-      content: "- ";
+      content: "– ";
       color: var(--muted);
     }
+
+    .word-list li.found-word {
+      color: var(--success);
+      text-decoration: line-through;
+      text-decoration-thickness: 2px;
+      animation: word-found 0.65s ease;
+    }
+
+    @keyframes word-found {
+      0% { transform: scale(1); }
+      40% { transform: scale(1.08); }
+      100% { transform: scale(1); }
+    }
+
+    .modal {
+      position: fixed;
+      inset: 0;
+      z-index: 1000;
+      display: grid;
+      place-items: center;
+      padding: 20px;
+      background: rgba(16, 24, 40, 0.58);
+      backdrop-filter: blur(3px);
+    }
+
+    .modal[hidden] { display: none; }
+
+    .modal-card {
+      width: min(560px, 100%);
+      max-height: min(75vh, 620px);
+      overflow: auto;
+      padding: 24px;
+      border-radius: 18px;
+      background: white;
+      box-shadow: 0 24px 80px rgba(16, 24, 40, 0.28);
+      animation: modal-in 0.24s ease-out;
+    }
+
+    .modal-card h2 {
+      margin: 0 42px 8px 0;
+      color: var(--success);
+      font-size: 1.8rem;
+    }
+
+    .modal-card p {
+      margin: 0;
+      white-space: pre-wrap;
+    }
+
+    .modal-card-header { position: relative; }
+
+    .modal-close {
+      position: absolute;
+      top: -7px;
+      right: -7px;
+      width: 38px;
+      height: 38px;
+      padding: 0;
+      display: grid;
+      place-items: center;
+      border-radius: 50%;
+      background: #eef2f6;
+      color: var(--text);
+      font-size: 1.35rem;
+    }
+
+    @keyframes modal-in {
+      from { opacity: 0; transform: translateY(12px) scale(0.98); }
+      to { opacity: 1; transform: translateY(0) scale(1); }
+    }
+
+    footer {
+      width: min(1220px, calc(100% - 32px));
+      margin: 0 auto 24px;
+      display: flex;
+      justify-content: center;
+      flex-wrap: wrap;
+      gap: 8px 18px;
+      color: var(--muted);
+      font-size: 0.72rem;
+    }
+
+    footer a {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      color: inherit;
+      text-decoration: none;
+    }
+
+    footer a:hover { color: var(--primary); }
+    footer svg { width: 14px; height: 14px; fill: currentColor; }
 
     @media (max-width: 900px) {
       main { grid-template-columns: 1fr; }
@@ -314,52 +521,53 @@
     }
 
     @media (max-width: 560px) {
-      :root { --cell: 25px; }
+      :root { --cell: 26px; }
       .word-list { grid-template-columns: 1fr 1fr; }
-      main { width: min(100% - 20px, 1180px); }
+      main { width: min(100% - 20px, 1220px); }
       .result, .controls { padding: 16px; }
+      .word-grid td { font-size: 0.92rem; }
     }
 
     @media print {
       body { background: white; }
-      header, .controls, .result-header, .messages { display: none !important; }
+      header, .controls, .result-header, .messages, footer, .grid-instructions, .words-visibility-control, .modal { display: none !important; }
       main { display: block; width: 100%; margin: 0; }
-      .result { border: none; box-shadow: none; padding: 0; overflow: visible; }
+      .result { border: none; box-shadow: none; padding: 0; overflow: visible; min-height: 0; }
       .panel { border: none; box-shadow: none; }
       :root { --cell: 28px; }
       .word-grid td { print-color-adjust: exact; -webkit-print-color-adjust: exact; }
-      .solution-on .word-grid td.solution { background: white; color: black; }
+      .solution-on .word-grid td.solution:not(.found) { background: white; color: black; }
     }
   </style>
 </head>
 <body>
   <header>
     <h1>Générateur de mots mêlés</h1>
-    <p>Dépose un fichier texte ou saisis une liste de mots, puis génère automatiquement une grille de mots mêlés.</p>
+    <p>Importe une liste simple ou un fichier JSON enrichi, génère une grille, puis retrouve les mots directement à l’écran.</p>
   </header>
 
   <main>
-    <section class="panel controls">
-      <h2>Liste de mots</h2>
+    <section class="panel controls" aria-labelledby="controlsTitle">
+      <h2 id="controlsTitle">Liste de mots</h2>
 
       <div class="constraints">
         <strong>Contraintes appliquées :</strong>
         <ul>
           <li>entre 1 et 20 mots ;</li>
           <li>2 à 20 caractères par mot ;</li>
-          <li>accents supprimés automatiquement ;</li>
-          <li>mots placés dans des directions aléatoires.</li>
+          <li>accents et séparateurs supprimés automatiquement ;</li>
+          <li>fichiers texte, CSV ou JSON acceptés.</li>
         </ul>
       </div>
 
-      <div id="dropZone" class="drop-zone" tabindex="0" role="button" aria-label="Déposer ou sélectionner un fichier">
+      <div id="dropZone" class="drop-zone" tabindex="0" role="button" aria-label="Déposer ou sélectionner un fichier texte, CSV ou JSON">
         <strong>Dépose un fichier ici</strong><br />
-        ou clique pour sélectionner un fichier texte / CSV.
-        <input id="fileInput" type="file" accept=".txt,.csv,text/plain,text/csv" hidden />
+        ou clique pour sélectionner un fichier texte, CSV ou JSON.
+        <input id="fileInput" type="file" accept=".txt,.csv,.json,text/plain,text/csv,application/json" hidden />
         <div id="fileName" class="file-name"></div>
       </div>
 
-      <label for="wordsInput">Ou écris directement les mots</label>
+      <label class="field-label" for="wordsInput">Ou écris directement les mots</label>
       <textarea id="wordsInput" spellcheck="false" placeholder="Exemple :
 CICD
 Pipeline
@@ -367,11 +575,31 @@ Déploiement
 Infrastructure
 Docker
 Terraform"></textarea>
+      <p class="input-hint">Le JSON peut être un tableau d’objets <code>{&quot;mot&quot;:&quot;Scrum&quot;,&quot;explication&quot;:&quot;...&quot;}</code> ou un objet contenant une propriété <code>mots</code>.</p>
+
+      <div class="options" aria-label="Options de génération">
+        <label class="option" for="readingDirectionOnly">
+          <input id="readingDirectionOnly" type="checkbox" />
+          <span>
+            Sens de la lecture uniquement
+            <small>Place les mots de gauche à droite et/ou de haut en bas.</small>
+          </span>
+        </label>
+        <label class="option" for="hideWords">
+          <input id="hideWords" type="checkbox" />
+          <span>
+            Masquer les mots à trouver
+            <small>La liste est masquée au départ, mais pourra être affichée après la génération.</small>
+          </span>
+        </label>
+      </div>
 
       <div class="actions">
         <button id="generateBtn" class="btn-primary">Générer la grille</button>
         <button id="toggleSolutionBtn" class="btn-secondary" disabled>Afficher la solution</button>
-        <button id="copyBtn" class="btn-secondary" disabled>Copier la grille</button>
+        <button id="exportImageBtn" class="btn-secondary" disabled>Exporter l’image</button>
+        <button id="exportTextBtn" class="btn-secondary" disabled>Exporter le texte</button>
+        <button id="copyBtn" class="btn-secondary" disabled>Copier en Markdown</button>
         <button id="printBtn" class="btn-secondary" disabled>Imprimer</button>
         <button id="clearBtn" class="btn-secondary">Effacer</button>
       </div>
@@ -379,10 +607,10 @@ Terraform"></textarea>
       <div id="messages" class="messages" aria-live="polite"></div>
     </section>
 
-    <section id="result" class="panel result">
+    <section id="result" class="panel result" aria-labelledby="resultTitle">
       <div class="result-header">
         <div>
-          <h2>Grille générée</h2>
+          <h2 id="resultTitle">Grille générée</h2>
           <div id="meta" class="meta"></div>
         </div>
       </div>
@@ -390,21 +618,45 @@ Terraform"></textarea>
       <div id="output" class="empty-state">
         <div>
           <strong>Aucune grille pour le moment.</strong><br />
-          Ajoute des mots puis clique sur “Générer la grille”.
+          Ajoute des mots puis clique sur « Générer la grille ».
         </div>
       </div>
     </section>
   </main>
 
+  <footer aria-label="Liens du projet">
+    <a href="https://youtube.com/@agiletoolkit?si=uUh6y0IFAf6Y8RRs" target="_blank" rel="noopener noreferrer">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M23.5 6.2a3 3 0 0 0-2.1-2.1C19.5 3.6 12 3.6 12 3.6s-7.5 0-9.4.5A3 3 0 0 0 .5 6.2 31 31 0 0 0 0 12a31 31 0 0 0 .5 5.8 3 3 0 0 0 2.1 2.1c1.9.5 9.4.5 9.4.5s7.5 0 9.4-.5a3 3 0 0 0 2.1-2.1A31 31 0 0 0 24 12a31 31 0 0 0-.5-5.8ZM9.6 15.6V8.4L15.8 12l-6.2 3.6Z"/></svg>
+      Chaîne YouTube Agile Toolkit
+    </a>
+    <a href="https://github.com/AgileAndDevOpsToolkit/mots-meles-icebreakler" target="_blank" rel="noopener noreferrer">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 .7A11.5 11.5 0 0 0 8.4 23c.6.1.8-.3.8-.6v-2.2c-3.4.7-4.1-1.4-4.1-1.4-.5-1.4-1.3-1.8-1.3-1.8-1.1-.7.1-.7.1-.7 1.2.1 1.8 1.2 1.8 1.2 1.1 1.8 2.8 1.3 3.5 1 .1-.8.4-1.3.8-1.6-2.7-.3-5.5-1.3-5.5-5.8 0-1.3.5-2.3 1.2-3.1-.1-.3-.5-1.6.1-3.1 0 0 1-.3 3.2 1.2a11 11 0 0 1 5.8 0C16.9 4.6 18 5 18 5c.6 1.5.2 2.8.1 3.1.8.8 1.2 1.8 1.2 3.1 0 4.5-2.8 5.5-5.5 5.8.4.4.8 1.1.8 2.2v3.2c0 .3.2.7.8.6A11.5 11.5 0 0 0 12 .7Z"/></svg>
+      Dépôt GitHub
+    </a>
+  </footer>
+
+  <div id="explanationModal" class="modal" hidden role="dialog" aria-modal="true" aria-labelledby="modalWord">
+    <div class="modal-card">
+      <div class="modal-card-header">
+        <h2 id="modalWord"></h2>
+        <button id="modalClose" class="modal-close" type="button" aria-label="Fermer">×</button>
+      </div>
+      <p id="modalExplanation"></p>
+    </div>
+  </div>
+
   <script>
+    "use strict";
+
     const MIN_WORD_LENGTH = 2;
     const MAX_WORD_LENGTH = 20;
     const MIN_WORDS = 1;
     const MAX_WORDS = 20;
-    const MAX_GRID_SIZE = 28;
+    const MAX_GRID_SIZE = 40;
+    const MAX_FILE_SIZE = 2 * 1024 * 1024;
     const ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
 
-    const directions = [
+    const ALL_DIRECTIONS = [
       { dr: 0, dc: 1 },
       { dr: 0, dc: -1 },
       { dr: 1, dc: 0 },
@@ -415,12 +667,21 @@ Terraform"></textarea>
       { dr: -1, dc: 1 }
     ];
 
+    const READING_DIRECTIONS = [
+      { dr: 0, dc: 1 },
+      { dr: 1, dc: 0 }
+    ];
+
     const wordsInput = document.getElementById("wordsInput");
     const dropZone = document.getElementById("dropZone");
     const fileInput = document.getElementById("fileInput");
     const fileName = document.getElementById("fileName");
+    const readingDirectionOnly = document.getElementById("readingDirectionOnly");
+    const hideWords = document.getElementById("hideWords");
     const generateBtn = document.getElementById("generateBtn");
     const toggleSolutionBtn = document.getElementById("toggleSolutionBtn");
+    const exportImageBtn = document.getElementById("exportImageBtn");
+    const exportTextBtn = document.getElementById("exportTextBtn");
     const copyBtn = document.getElementById("copyBtn");
     const printBtn = document.getElementById("printBtn");
     const clearBtn = document.getElementById("clearBtn");
@@ -428,12 +689,27 @@ Terraform"></textarea>
     const output = document.getElementById("output");
     const meta = document.getElementById("meta");
     const result = document.getElementById("result");
+    const explanationModal = document.getElementById("explanationModal");
+    const modalWord = document.getElementById("modalWord");
+    const modalExplanation = document.getElementById("modalExplanation");
+    const modalClose = document.getElementById("modalClose");
 
     let currentPuzzle = null;
     let solutionVisible = false;
+    let selectionState = createSelectionState();
+    let previousModalFocus = null;
+
+    function createSelectionState() {
+      return {
+        active: false,
+        pointerId: null,
+        start: null,
+        cells: []
+      };
+    }
 
     function normalizeWord(word) {
-      return word
+      return String(word ?? "")
         .trim()
         .normalize("NFD")
         .replace(/[\u0300-\u036f]/g, "")
@@ -441,53 +717,156 @@ Terraform"></textarea>
         .replace(/[^A-Z0-9]/g, "");
     }
 
-    function parseWords(rawText) {
-      const rawItems = rawText
+    function reverseText(text) {
+      return [...text].reverse().join("");
+    }
+
+    function looksLikeJson(rawText) {
+      const trimmed = rawText.trim();
+      return trimmed.startsWith("[") || trimmed.startsWith("{");
+    }
+
+    function parsePlainEntries(rawText) {
+      return rawText
         .split(/[\s,;|]+/)
         .map(item => item.trim())
-        .filter(Boolean);
+        .filter(Boolean)
+        .map(item => ({ rawWord: item, explanation: "" }));
+    }
+
+    function parseJsonEntries(rawText) {
+      let payload;
+
+      try {
+        payload = JSON.parse(rawText);
+      } catch (error) {
+        return {
+          entries: [],
+          errors: ["Le contenu ressemble à du JSON, mais sa syntaxe n’est pas valide."],
+          warnings: [],
+          format: "json"
+        };
+      }
+
+      const items = Array.isArray(payload)
+        ? payload
+        : payload && typeof payload === "object"
+          ? (payload.mots ?? payload.words)
+          : null;
+
+      if (!Array.isArray(items)) {
+        return {
+          entries: [],
+          errors: ["Le JSON doit être un tableau ou un objet contenant un tableau « mots »."],
+          warnings: [],
+          format: "json"
+        };
+      }
 
       const errors = [];
+      const rawEntries = [];
+
+      items.forEach((item, index) => {
+        if (typeof item === "string") {
+          rawEntries.push({ rawWord: item, explanation: "" });
+          return;
+        }
+
+        if (!item || typeof item !== "object" || Array.isArray(item)) {
+          errors.push(`Élément JSON ${index + 1} : un texte ou un objet était attendu.`);
+          return;
+        }
+
+        const rawWord = item.mot ?? item.word ?? item.terme;
+        const explanation = item.explication ?? item.explanation ?? item.description ?? "";
+
+        if (typeof rawWord !== "string" || !rawWord.trim()) {
+          errors.push(`Élément JSON ${index + 1} : la propriété « mot » est manquante ou invalide.`);
+          return;
+        }
+
+        if (typeof explanation !== "string") {
+          errors.push(`Élément JSON ${index + 1} : l’explication doit être un texte.`);
+          return;
+        }
+
+        rawEntries.push({ rawWord, explanation: explanation.trim() });
+      });
+
+      const validated = validateEntries(rawEntries);
+      return {
+        ...validated,
+        errors: [...errors, ...validated.errors],
+        format: "json"
+      };
+    }
+
+    function validateEntries(rawEntries) {
+      const errors = [];
       const warnings = [];
-      const normalizedWords = [];
+      const entries = [];
       const seen = new Set();
 
-      rawItems.forEach(raw => {
-        const normalized = normalizeWord(raw);
+      rawEntries.forEach(({ rawWord, explanation }) => {
+        const normalized = normalizeWord(rawWord);
 
         if (!normalized) {
-          errors.push(`"${raw}" ne contient aucun caractère utilisable.`);
+          errors.push(`« ${rawWord} » ne contient aucun caractère utilisable.`);
           return;
         }
 
         if (normalized.length < MIN_WORD_LENGTH) {
-          errors.push(`"${raw}" devient "${normalized}" : minimum ${MIN_WORD_LENGTH} caractères.`);
+          errors.push(`« ${rawWord} » devient « ${normalized} » : minimum ${MIN_WORD_LENGTH} caractères.`);
           return;
         }
 
         if (normalized.length > MAX_WORD_LENGTH) {
-          errors.push(`"${raw}" devient "${normalized}" : maximum ${MAX_WORD_LENGTH} caractères.`);
+          errors.push(`« ${rawWord} » devient « ${normalized} » : maximum ${MAX_WORD_LENGTH} caractères.`);
           return;
         }
 
         if (seen.has(normalized)) {
-          warnings.push(`Doublon ignoré : "${normalized}".`);
+          warnings.push(`Doublon ignoré : « ${normalized} ».`);
           return;
         }
 
         seen.add(normalized);
-        normalizedWords.push(normalized);
+        entries.push({
+          word: normalized,
+          original: String(rawWord).trim(),
+          explanation: explanation || ""
+        });
       });
 
-      if (normalizedWords.length < MIN_WORDS) {
+      if (entries.length < MIN_WORDS) {
         errors.push(`Il faut au moins ${MIN_WORDS} mot valide.`);
       }
 
-      if (normalizedWords.length > MAX_WORDS) {
-        errors.push(`Il y a ${normalizedWords.length} mots valides : maximum ${MAX_WORDS} mots.`);
+      if (entries.length > MAX_WORDS) {
+        errors.push(`Il y a ${entries.length} mots valides : maximum ${MAX_WORDS} mots.`);
       }
 
-      return { words: normalizedWords, errors, warnings };
+      return { entries, errors, warnings };
+    }
+
+    function parseInput(rawText, forceJson = false) {
+      if (!rawText.trim()) {
+        return {
+          entries: [],
+          errors: ["Saisis ou importe au moins un mot."],
+          warnings: [],
+          format: "plain"
+        };
+      }
+
+      if (forceJson || looksLikeJson(rawText)) {
+        return parseJsonEntries(rawText);
+      }
+
+      return {
+        ...validateEntries(parsePlainEntries(rawText)),
+        format: "plain"
+      };
     }
 
     function shuffle(array) {
@@ -548,11 +927,10 @@ Terraform"></textarea>
       return { positions, overlapScore };
     }
 
-    function findPlacements(grid, word) {
+    function findPlacements(grid, word, allowedDirections) {
       const candidates = [];
-      const shuffledDirections = shuffle(directions);
 
-      for (const direction of shuffledDirections) {
+      for (const direction of shuffle(allowedDirections)) {
         for (let row = 0; row < grid.length; row++) {
           for (let col = 0; col < grid.length; col++) {
             const placement = canPlaceWord(grid, word, row, col, direction);
@@ -580,7 +958,6 @@ Terraform"></textarea>
 
       const bestOverlap = Math.max(...candidates.map(candidate => candidate.overlapScore));
       const bestCandidates = candidates.filter(candidate => candidate.overlapScore === bestOverlap);
-
       return bestCandidates[Math.floor(Math.random() * bestCandidates.length)];
     }
 
@@ -596,17 +973,17 @@ Terraform"></textarea>
 
     function buildSolutionSet(placements) {
       const solutionCells = new Set();
-
       placements.forEach(placement => {
         placement.positions.forEach(position => {
           solutionCells.add(`${position.row}-${position.col}`);
         });
       });
-
       return solutionCells;
     }
 
-    function generatePuzzle(words) {
+    function generatePuzzle(entries, options) {
+      const words = entries.map(entry => entry.word);
+      const allowedDirections = options.readingOnly ? READING_DIRECTIONS : ALL_DIRECTIONS;
       const initialSize = computeInitialGridSize(words);
       const orderedBase = [...words].sort((a, b) => b.length - a.length);
 
@@ -615,11 +992,10 @@ Terraform"></textarea>
           const grid = createEmptyGrid(size);
           const placements = [];
           const shuffledWords = shuffle(orderedBase);
-
           let success = true;
 
           for (const word of shuffledWords) {
-            const candidates = findPlacements(grid, word);
+            const candidates = findPlacements(grid, word, allowedDirections);
             const placement = choosePlacement(candidates);
 
             if (!placement) {
@@ -632,13 +1008,17 @@ Terraform"></textarea>
           }
 
           if (success) {
-            const completedGrid = completeGrid(grid);
             return {
               size,
+              entries,
               words,
-              grid: completedGrid,
+              grid: completeGrid(grid),
               placements,
-              solutionCells: buildSolutionSet(placements)
+              solutionCells: buildSolutionSet(placements),
+              foundWords: new Set(),
+              foundCellKeys: new Set(),
+              wordsListVisible: !options.hideWords,
+              options: { ...options }
             };
           }
         }
@@ -647,73 +1027,405 @@ Terraform"></textarea>
       throw new Error("Impossible de générer la grille. Essaie avec moins de mots ou des mots plus courts.");
     }
 
+    function createElement(tagName, className, text) {
+      const element = document.createElement(tagName);
+      if (className) element.className = className;
+      if (text !== undefined) element.textContent = text;
+      return element;
+    }
+
+    function createWordsSection(puzzle) {
+      const wordsSection = createElement("section", "words-to-find");
+      wordsSection.id = "wordsToFind";
+      wordsSection.appendChild(createElement("h3", "", "Mots à trouver :"));
+      const list = createElement("ul", "word-list");
+
+      puzzle.entries.forEach(entry => {
+        const item = createElement("li", "", entry.word);
+        item.dataset.word = entry.word;
+        if (puzzle.foundWords.has(entry.word)) {
+          item.classList.add("found-word");
+        }
+        list.appendChild(item);
+      });
+
+      wordsSection.appendChild(list);
+      return wordsSection;
+    }
+
+    function updateWordsVisibilityButton() {
+      const button = document.getElementById("toggleWordsVisibilityBtn");
+      if (!button || !currentPuzzle) return;
+
+      button.textContent = currentPuzzle.wordsListVisible
+        ? "Masquer les mots à trouver"
+        : "Afficher les mots à trouver";
+      button.setAttribute("aria-expanded", String(currentPuzzle.wordsListVisible));
+    }
+
+    function setWordsListVisibility(visible) {
+      if (!currentPuzzle) return;
+
+      currentPuzzle.wordsListVisible = visible;
+      const existingSection = document.getElementById("wordsToFind");
+
+      if (visible && !existingSection) {
+        output.appendChild(createWordsSection(currentPuzzle));
+      } else if (!visible && existingSection) {
+        existingSection.remove();
+      }
+
+      const subtitle = output.querySelector(".puzzle-subtitle");
+      if (subtitle) {
+        subtitle.textContent = visible
+          ? `Sélectionne les ${currentPuzzle.words.length} mots cachés dans la grille.`
+          : `Retrouve les ${currentPuzzle.words.length} mots cachés dans la grille.`;
+      }
+
+      updateWordsVisibilityButton();
+      updateProgress();
+    }
+
+    function toggleWordsListVisibility() {
+      if (!currentPuzzle) return;
+      setWordsListVisibility(!currentPuzzle.wordsListVisible);
+    }
+
     function renderPuzzle(puzzle) {
       solutionVisible = false;
+      selectionState = createSelectionState();
       result.classList.remove("solution-on");
       toggleSolutionBtn.textContent = "Afficher la solution";
-      toggleSolutionBtn.disabled = false;
-      copyBtn.disabled = false;
-      printBtn.disabled = false;
-
-      meta.textContent = `${puzzle.words.length} mot(s), grille ${puzzle.size} × ${puzzle.size}`;
-
-      const tableRows = puzzle.grid.map((row, rowIndex) => {
-        const cells = row.map((letter, colIndex) => {
-          const isSolution = puzzle.solutionCells.has(`${rowIndex}-${colIndex}`);
-          return `<td class="${isSolution ? "solution" : ""}">${letter}</td>`;
-        }).join("");
-
-        return `<tr>${cells}</tr>`;
-      }).join("");
-
-      const wordItems = puzzle.words
-        .map(word => `<li>${word}</li>`)
-        .join("");
+      [toggleSolutionBtn, exportImageBtn, exportTextBtn, copyBtn, printBtn].forEach(button => {
+        button.disabled = false;
+      });
 
       output.className = "";
-      output.innerHTML = `
-        <h2 class="puzzle-title">Mots mêlés</h2>
-        <p class="puzzle-subtitle">Retrouve les ${puzzle.words.length} mots cachés dans la grille.</p>
-        <div class="grid-wrap">
-          <table class="word-grid" aria-label="Grille de mots mêlés">
-            <tbody>${tableRows}</tbody>
-          </table>
-        </div>
-        <section class="words-to-find">
-          <h3>Mots à trouver :</h3>
-          <ul class="word-list">${wordItems}</ul>
-        </section>
-      `;
+      output.replaceChildren();
+
+      output.appendChild(createElement("h2", "puzzle-title", "Mots mêlés"));
+      output.appendChild(createElement(
+        "p",
+        "puzzle-subtitle",
+        puzzle.wordsListVisible
+          ? `Sélectionne les ${puzzle.words.length} mots cachés dans la grille.`
+          : `Retrouve les ${puzzle.words.length} mots cachés dans la grille.`
+      ));
+
+      const progress = createElement("p", "progress");
+      progress.id = "progress";
+      output.appendChild(progress);
+
+      if (puzzle.options.hideWords) {
+        const visibilityControl = createElement("div", "words-visibility-control");
+        const visibilityButton = createElement("button", "btn-secondary", "Afficher les mots à trouver");
+        visibilityButton.id = "toggleWordsVisibilityBtn";
+        visibilityButton.type = "button";
+        visibilityButton.setAttribute("aria-controls", "wordsToFind");
+        visibilityButton.setAttribute("aria-expanded", String(puzzle.wordsListVisible));
+        visibilityButton.addEventListener("click", toggleWordsListVisibility);
+        visibilityControl.appendChild(visibilityButton);
+        output.appendChild(visibilityControl);
+      }
+
+      output.appendChild(createElement(
+        "p",
+        "grid-instructions",
+        "Clique ou touche une lettre, puis fais glisser jusqu’à la dernière lettre. La sélection s’aligne automatiquement sur une ligne droite."
+      ));
+
+      const gridWrap = createElement("div", "grid-wrap");
+      const table = createElement("table", "word-grid");
+      table.setAttribute("aria-label", "Grille interactive de mots mêlés");
+      table.setAttribute("role", "grid");
+      const tbody = document.createElement("tbody");
+
+      puzzle.grid.forEach((row, rowIndex) => {
+        const tr = document.createElement("tr");
+        row.forEach((letter, colIndex) => {
+          const td = createElement("td", "", letter);
+          td.dataset.row = String(rowIndex);
+          td.dataset.col = String(colIndex);
+          td.setAttribute("role", "gridcell");
+          td.setAttribute("aria-label", `Ligne ${rowIndex + 1}, colonne ${colIndex + 1} : ${letter}`);
+          if (puzzle.solutionCells.has(`${rowIndex}-${colIndex}`)) {
+            td.classList.add("solution");
+          }
+          tr.appendChild(td);
+        });
+        tbody.appendChild(tr);
+      });
+
+      table.appendChild(tbody);
+      gridWrap.appendChild(table);
+      output.appendChild(gridWrap);
+      attachGridInteractions(table);
+
+      if (puzzle.wordsListVisible) {
+        output.appendChild(createWordsSection(puzzle));
+      }
+
+      updateWordsVisibilityButton();
+
+      updateProgress();
+    }
+
+    function updateProgress() {
+      if (!currentPuzzle) return;
+      const foundCount = currentPuzzle.foundWords.size;
+      const total = currentPuzzle.words.length;
+      const progress = document.getElementById("progress");
+      if (progress) {
+        progress.textContent = `Mots trouvés : ${foundCount} / ${total}`;
+      }
+      const directionText = currentPuzzle.options.readingOnly ? "sens de lecture" : "8 directions";
+      const listText = currentPuzzle.wordsListVisible ? "" : ", liste masquée";
+      meta.textContent = `${total} mot(s), grille ${currentPuzzle.size} × ${currentPuzzle.size}, ${directionText}${listText}`;
+    }
+
+    function getCellElement(row, col) {
+      return output.querySelector(`.word-grid td[data-row="${row}"][data-col="${col}"]`);
+    }
+
+    function clearSelectingClasses() {
+      output.querySelectorAll(".word-grid td.selecting").forEach(cell => {
+        cell.classList.remove("selecting");
+      });
+    }
+
+    function getRawGridPosition(event, table) {
+      const rect = table.getBoundingClientRect();
+      const col = Math.floor(((event.clientX - rect.left) / rect.width) * currentPuzzle.size);
+      const row = Math.floor(((event.clientY - rect.top) / rect.height) * currentPuzzle.size);
+      return { row, col };
+    }
+
+    function getSnappedDirection(deltaRow, deltaCol) {
+      const absRow = Math.abs(deltaRow);
+      const absCol = Math.abs(deltaCol);
+
+      if (absRow === 0 && absCol === 0) {
+        return { dr: 0, dc: 0, steps: 0 };
+      }
+
+      if (absCol < absRow * 0.45) {
+        return { dr: Math.sign(deltaRow), dc: 0, steps: absRow };
+      }
+
+      if (absRow < absCol * 0.45) {
+        return { dr: 0, dc: Math.sign(deltaCol), steps: absCol };
+      }
+
+      return {
+        dr: Math.sign(deltaRow),
+        dc: Math.sign(deltaCol),
+        steps: Math.max(absRow, absCol)
+      };
+    }
+
+    function maxStepsInsideGrid(start, direction, size) {
+      const rowLimit = direction.dr > 0
+        ? size - 1 - start.row
+        : direction.dr < 0
+          ? start.row
+          : Number.POSITIVE_INFINITY;
+      const colLimit = direction.dc > 0
+        ? size - 1 - start.col
+        : direction.dc < 0
+          ? start.col
+          : Number.POSITIVE_INFINITY;
+      return Math.min(rowLimit, colLimit);
+    }
+
+    function buildSnappedCells(start, rawTarget) {
+      const deltaRow = rawTarget.row - start.row;
+      const deltaCol = rawTarget.col - start.col;
+      const direction = getSnappedDirection(deltaRow, deltaCol);
+
+      if (direction.steps === 0) {
+        return [{ row: start.row, col: start.col }];
+      }
+
+      const steps = Math.min(
+        direction.steps,
+        maxStepsInsideGrid(start, direction, currentPuzzle.size)
+      );
+
+      return Array.from({ length: steps + 1 }, (_, index) => ({
+        row: start.row + direction.dr * index,
+        col: start.col + direction.dc * index
+      }));
+    }
+
+    function displaySelection(cells) {
+      clearSelectingClasses();
+      cells.forEach(({ row, col }) => {
+        getCellElement(row, col)?.classList.add("selecting");
+      });
+      selectionState.cells = cells;
+    }
+
+    function attachGridInteractions(table) {
+      table.addEventListener("pointerdown", event => {
+        if (!currentPuzzle || (event.pointerType === "mouse" && event.button !== 0)) return;
+        const cell = event.target.closest("td[data-row][data-col]");
+        if (!cell) return;
+
+        event.preventDefault();
+        table.setPointerCapture?.(event.pointerId);
+        selectionState = {
+          active: true,
+          pointerId: event.pointerId,
+          start: {
+            row: Number(cell.dataset.row),
+            col: Number(cell.dataset.col)
+          },
+          cells: []
+        };
+        displaySelection([selectionState.start]);
+      });
+
+      table.addEventListener("pointermove", event => {
+        if (!selectionState.active || selectionState.pointerId !== event.pointerId) return;
+        event.preventDefault();
+        displaySelection(buildSnappedCells(selectionState.start, getRawGridPosition(event, table)));
+      });
+
+      const finish = event => {
+        if (!selectionState.active || selectionState.pointerId !== event.pointerId) return;
+        event.preventDefault();
+        displaySelection(buildSnappedCells(selectionState.start, getRawGridPosition(event, table)));
+        table.releasePointerCapture?.(event.pointerId);
+        finalizeSelection(selectionState.cells);
+        selectionState = createSelectionState();
+      };
+
+      table.addEventListener("pointerup", finish);
+      table.addEventListener("pointercancel", event => {
+        if (selectionState.pointerId === event.pointerId) {
+          clearSelectingClasses();
+          selectionState = createSelectionState();
+        }
+      });
+    }
+
+    function wordFromCells(cells) {
+      return cells
+        .map(({ row, col }) => currentPuzzle.grid[row][col])
+        .join("");
+    }
+
+    function finalizeSelection(cells) {
+      if (!currentPuzzle) return;
+      clearSelectingClasses();
+
+      if (cells.length < MIN_WORD_LENGTH) {
+        return;
+      }
+
+      const selected = wordFromCells(cells);
+      const reversed = reverseText(selected);
+      const matchedEntry = currentPuzzle.entries.find(entry => (
+        entry.word === selected || entry.word === reversed
+      ));
+
+      if (!matchedEntry) {
+        flashCells(cells, "invalid-selection", 620);
+        showMessages([{
+          type: "error",
+          text: `« ${selected} » ne fait pas partie des mots à trouver.`
+        }]);
+        return;
+      }
+
+      if (currentPuzzle.foundWords.has(matchedEntry.word)) {
+        flashCells(cells, "found-animation", 620);
+        showMessages([{
+          type: "warning",
+          text: `« ${matchedEntry.word} » a déjà été trouvé.`
+        }]);
+        return;
+      }
+
+      currentPuzzle.foundWords.add(matchedEntry.word);
+      cells.forEach(({ row, col }) => {
+        const key = `${row}-${col}`;
+        currentPuzzle.foundCellKeys.add(key);
+        const cell = getCellElement(row, col);
+        cell?.classList.add("found", "found-animation");
+      });
+
+      const listItem = output.querySelector(`.word-list li[data-word="${CSS.escape(matchedEntry.word)}"]`);
+      listItem?.classList.add("found-word");
+      window.setTimeout(() => {
+        cells.forEach(({ row, col }) => getCellElement(row, col)?.classList.remove("found-animation"));
+      }, 700);
+
+      updateProgress();
+      const allFound = currentPuzzle.foundWords.size === currentPuzzle.words.length;
+      showMessages([{
+        type: "success",
+        text: allFound
+          ? `Bravo ! Tous les mots ont été trouvés. Dernier mot : « ${matchedEntry.word} ».`
+          : `Bravo, « ${matchedEntry.word} » a été trouvé.`
+      }]);
+
+      if (matchedEntry.explanation) {
+        openExplanationModal(matchedEntry);
+      }
+    }
+
+    function flashCells(cells, className, duration) {
+      cells.forEach(({ row, col }) => getCellElement(row, col)?.classList.add(className));
+      window.setTimeout(() => {
+        cells.forEach(({ row, col }) => getCellElement(row, col)?.classList.remove(className));
+      }, duration);
+    }
+
+    function openExplanationModal(entry) {
+      previousModalFocus = document.activeElement;
+      modalWord.textContent = entry.word;
+      modalExplanation.textContent = entry.explanation;
+      explanationModal.hidden = false;
+      document.body.classList.add("modal-open");
+      modalClose.focus();
+    }
+
+    function closeExplanationModal() {
+      explanationModal.hidden = true;
+      document.body.classList.remove("modal-open");
+      previousModalFocus?.focus?.();
+      previousModalFocus = null;
     }
 
     function showMessages(items) {
-      messages.innerHTML = items
-        .map(item => `<div class="message ${item.type}">${item.text}</div>`)
-        .join("");
+      messages.replaceChildren();
+      items.forEach(item => {
+        messages.appendChild(createElement("div", `message ${item.type}`, item.text));
+      });
     }
 
     function generateFromInput() {
-      const { words, errors, warnings } = parseWords(wordsInput.value);
+      const { entries, errors, warnings, format } = parseInput(wordsInput.value);
       const messageItems = [
         ...errors.map(text => ({ type: "error", text })),
         ...warnings.map(text => ({ type: "warning", text }))
       ];
 
       if (errors.length) {
-        currentPuzzle = null;
-        toggleSolutionBtn.disabled = true;
-        copyBtn.disabled = true;
-        printBtn.disabled = true;
-        meta.textContent = "";
         showMessages(messageItems);
         return;
       }
 
       try {
-        currentPuzzle = generatePuzzle(words);
+        currentPuzzle = generatePuzzle(entries, {
+          readingOnly: readingDirectionOnly.checked,
+          hideWords: hideWords.checked,
+          sourceFormat: format
+        });
         renderPuzzle(currentPuzzle);
         showMessages([
-          { type: "success", text: "Grille générée avec succès." },
+          { type: "success", text: `Grille générée avec succès à partir du format ${format === "json" ? "JSON" : "texte"}.` },
           ...messageItems
         ]);
       } catch (error) {
@@ -721,92 +1433,309 @@ Terraform"></textarea>
       }
     }
 
-    function copyGridToClipboard() {
-      if (!currentPuzzle) {
-        return;
-      }
+    function buildMarkdownExport() {
+      if (!currentPuzzle) return "";
 
       const gridText = currentPuzzle.grid
         .map(row => row.join(" "))
         .join("\n");
+      const lines = [
+        "# Mots mêlés",
+        "",
+        `${currentPuzzle.words.length} mot(s) — grille ${currentPuzzle.size} × ${currentPuzzle.size}`,
+        "",
+        "```text",
+        gridText,
+        "```"
+      ];
 
-      const wordsText = currentPuzzle.words.join("\n");
-      const fullText = `MOTS MÊLÉS\n\n${gridText}\n\nMots à trouver :\n${wordsText}`;
+      if (currentPuzzle.wordsListVisible) {
+        lines.push("", "## Mots à trouver", "");
+        currentPuzzle.entries.forEach(entry => lines.push(`- ${entry.word}`));
+      }
 
-      navigator.clipboard.writeText(fullText)
-        .then(() => showMessages([{ type: "success", text: "Grille copiée dans le presse-papiers." }]))
-        .catch(() => showMessages([{ type: "error", text: "Impossible de copier la grille." }]));
+      return lines.join("\n");
+    }
+
+    function downloadBlob(blob, filename) {
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+    }
+
+    function exportTextFile() {
+      if (!currentPuzzle) return;
+      downloadBlob(
+        new Blob([buildMarkdownExport()], { type: "text/markdown;charset=utf-8" }),
+        "mots-meles.md"
+      );
+      showMessages([{ type: "success", text: "Export Markdown téléchargé." }]);
+    }
+
+    function copyTextFallback(text) {
+      const temporary = document.createElement("textarea");
+      temporary.value = text;
+      temporary.setAttribute("readonly", "");
+      temporary.style.position = "fixed";
+      temporary.style.opacity = "0";
+      temporary.style.pointerEvents = "none";
+      document.body.appendChild(temporary);
+      temporary.select();
+
+      try {
+        return document.execCommand("copy");
+      } finally {
+        temporary.remove();
+      }
+    }
+
+    async function copyMarkdownToClipboard() {
+      if (!currentPuzzle) return;
+      const markdown = buildMarkdownExport();
+
+      try {
+        if (navigator.clipboard?.writeText) {
+          await navigator.clipboard.writeText(markdown);
+        } else if (!copyTextFallback(markdown)) {
+          throw new Error("Copie non disponible");
+        }
+        showMessages([{ type: "success", text: "Grille copiée en Markdown dans le presse-papiers." }]);
+      } catch (error) {
+        const fallbackWorked = copyTextFallback(markdown);
+        showMessages([{
+          type: fallbackWorked ? "success" : "error",
+          text: fallbackWorked
+            ? "Grille copiée en Markdown dans le presse-papiers."
+            : "Impossible de copier la grille dans le presse-papiers."
+        }]);
+      }
+    }
+
+    function exportPuzzleAsImage() {
+      if (!currentPuzzle) return;
+
+      const scale = 2;
+      const cellSize = 38;
+      const horizontalPadding = 48;
+      const titleArea = 135;
+      const gridSizePx = currentPuzzle.size * cellSize;
+      const listColumns = 3;
+      const listRows = currentPuzzle.wordsListVisible
+        ? Math.ceil(currentPuzzle.entries.length / listColumns)
+        : 0;
+      const listArea = currentPuzzle.wordsListVisible ? 78 + listRows * 29 : 30;
+      const width = Math.max(760, gridSizePx + horizontalPadding * 2);
+      const height = titleArea + gridSizePx + listArea + 34;
+      const canvas = document.createElement("canvas");
+      canvas.width = width * scale;
+      canvas.height = height * scale;
+      const context = canvas.getContext("2d");
+
+      if (!context) {
+        showMessages([{ type: "error", text: "Le navigateur ne permet pas de créer l’image." }]);
+        return;
+      }
+
+      context.scale(scale, scale);
+      context.fillStyle = "#ffffff";
+      context.fillRect(0, 0, width, height);
+      context.textAlign = "center";
+      context.textBaseline = "middle";
+      context.fillStyle = "#172033";
+      context.font = "800 38px system-ui, sans-serif";
+      context.fillText("MOTS MÊLÉS", width / 2, 42);
+      context.fillStyle = "#667085";
+      context.font = "650 16px system-ui, sans-serif";
+      context.fillText(
+        currentPuzzle.wordsListVisible
+          ? `Retrouve les ${currentPuzzle.words.length} mots de la liste.`
+          : `Retrouve les ${currentPuzzle.words.length} mots cachés.`,
+        width / 2,
+        78
+      );
+      context.fillStyle = "#067647";
+      context.font = "650 14px system-ui, sans-serif";
+      context.fillText(
+        `Mots trouvés : ${currentPuzzle.foundWords.size} / ${currentPuzzle.words.length}`,
+        width / 2,
+        105
+      );
+
+      const startX = Math.round((width - gridSizePx) / 2);
+      const startY = titleArea;
+      context.font = "900 19px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace";
+      context.lineWidth = 1;
+
+      currentPuzzle.grid.forEach((row, rowIndex) => {
+        row.forEach((letter, colIndex) => {
+          const x = startX + colIndex * cellSize;
+          const y = startY + rowIndex * cellSize;
+          const key = `${rowIndex}-${colIndex}`;
+          const isFound = currentPuzzle.foundCellKeys.has(key);
+          const isSolution = solutionVisible && currentPuzzle.solutionCells.has(key);
+
+          context.fillStyle = isFound ? "#abefc6" : isSolution ? "#dbeafe" : "#ffffff";
+          context.fillRect(x, y, cellSize, cellSize);
+          context.strokeStyle = "#111827";
+          context.strokeRect(x, y, cellSize, cellSize);
+          context.fillStyle = isFound ? "#05603a" : isSolution ? "#1d4ed8" : "#111827";
+          context.fillText(letter, x + cellSize / 2, y + cellSize / 2 + 1);
+        });
+      });
+
+      context.lineWidth = 2;
+      context.strokeStyle = "#111827";
+      context.strokeRect(startX, startY, gridSizePx, gridSizePx);
+
+      if (currentPuzzle.wordsListVisible) {
+        const listTitleY = startY + gridSizePx + 38;
+        context.fillStyle = "#172033";
+        context.font = "800 23px system-ui, sans-serif";
+        context.fillText("Mots à trouver", width / 2, listTitleY);
+        context.textAlign = "left";
+        context.font = "800 16px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace";
+        const columnWidth = (width - horizontalPadding * 2) / listColumns;
+
+        currentPuzzle.entries.forEach((entry, index) => {
+          const col = index % listColumns;
+          const row = Math.floor(index / listColumns);
+          const x = horizontalPadding + col * columnWidth;
+          const y = listTitleY + 38 + row * 29;
+          const found = currentPuzzle.foundWords.has(entry.word);
+          context.fillStyle = found ? "#067647" : "#172033";
+          context.fillText(`${found ? "✓" : "–"} ${entry.word}`, x, y);
+          if (found) {
+            const textWidth = context.measureText(entry.word).width;
+            context.strokeStyle = "#067647";
+            context.lineWidth = 2;
+            context.beginPath();
+            context.moveTo(x + 27, y);
+            context.lineTo(x + 27 + textWidth, y);
+            context.stroke();
+          }
+        });
+      }
+
+      canvas.toBlob(blob => {
+        if (!blob) {
+          showMessages([{ type: "error", text: "Impossible de générer le fichier image." }]);
+          return;
+        }
+        downloadBlob(blob, "mots-meles.png");
+        showMessages([{ type: "success", text: "Image PNG téléchargée." }]);
+      }, "image/png");
     }
 
     function clearAll() {
       wordsInput.value = "";
       fileInput.value = "";
       fileName.textContent = "";
+      readingDirectionOnly.checked = false;
+      hideWords.checked = false;
       currentPuzzle = null;
       solutionVisible = false;
+      selectionState = createSelectionState();
       meta.textContent = "";
-      messages.innerHTML = "";
-      toggleSolutionBtn.disabled = true;
-      copyBtn.disabled = true;
-      printBtn.disabled = true;
+      messages.replaceChildren();
+      [toggleSolutionBtn, exportImageBtn, exportTextBtn, copyBtn, printBtn].forEach(button => {
+        button.disabled = true;
+      });
       result.classList.remove("solution-on");
-
+      closeExplanationModal();
       output.className = "empty-state";
       output.innerHTML = `
         <div>
           <strong>Aucune grille pour le moment.</strong><br />
-          Ajoute des mots puis clique sur “Générer la grille”.
+          Ajoute des mots puis clique sur « Générer la grille ».
         </div>
       `;
     }
 
+    function supportedFile(file) {
+      const extension = file.name.toLowerCase().split(".").pop();
+      return ["txt", "csv", "json"].includes(extension);
+    }
+
     function handleFile(file) {
-      if (!file) {
+      if (!file) return;
+
+      if (!supportedFile(file)) {
+        showMessages([{ type: "error", text: "Format de fichier non pris en charge. Utilise un fichier .txt, .csv ou .json." }]);
+        return;
+      }
+
+      if (file.size > MAX_FILE_SIZE) {
+        showMessages([{ type: "error", text: "Le fichier est trop volumineux (maximum 2 Mo)." }]);
         return;
       }
 
       const reader = new FileReader();
-
       reader.onload = event => {
-        wordsInput.value = event.target.result;
-        fileName.textContent = `Fichier chargé : ${file.name}`;
-      };
+        const content = String(event.target.result ?? "");
+        const forceJson = file.name.toLowerCase().endsWith(".json");
+        const parsed = parseInput(content, forceJson);
 
+        if (forceJson && parsed.errors.length) {
+          showMessages(parsed.errors.map(text => ({ type: "error", text })));
+          fileName.textContent = "";
+          return;
+        }
+
+        wordsInput.value = content;
+        fileName.textContent = `Fichier chargé : ${file.name}`;
+        showMessages([
+          {
+            type: parsed.errors.length ? "warning" : "success",
+            text: parsed.errors.length
+              ? "Fichier chargé, mais certains éléments doivent être corrigés avant la génération."
+              : `Fichier ${parsed.format === "json" ? "JSON" : "texte"} chargé avec succès.`
+          },
+          ...parsed.errors.map(text => ({ type: "error", text })),
+          ...parsed.warnings.map(text => ({ type: "warning", text }))
+        ]);
+      };
       reader.onerror = () => {
         showMessages([{ type: "error", text: "Impossible de lire le fichier." }]);
       };
-
       reader.readAsText(file, "UTF-8");
     }
 
     generateBtn.addEventListener("click", generateFromInput);
 
     toggleSolutionBtn.addEventListener("click", () => {
-      if (!currentPuzzle) {
-        return;
-      }
-
+      if (!currentPuzzle) return;
       solutionVisible = !solutionVisible;
       result.classList.toggle("solution-on", solutionVisible);
       toggleSolutionBtn.textContent = solutionVisible ? "Masquer la solution" : "Afficher la solution";
     });
 
-    copyBtn.addEventListener("click", copyGridToClipboard);
+    exportImageBtn.addEventListener("click", exportPuzzleAsImage);
+    exportTextBtn.addEventListener("click", exportTextFile);
+    copyBtn.addEventListener("click", copyMarkdownToClipboard);
     printBtn.addEventListener("click", () => window.print());
     clearBtn.addEventListener("click", clearAll);
 
-    dropZone.addEventListener("click", () => fileInput.click());
+    modalClose.addEventListener("click", closeExplanationModal);
+    explanationModal.addEventListener("click", event => {
+      if (event.target === explanationModal) closeExplanationModal();
+    });
+    document.addEventListener("keydown", event => {
+      if (event.key === "Escape" && !explanationModal.hidden) closeExplanationModal();
+    });
 
+    dropZone.addEventListener("click", () => fileInput.click());
     dropZone.addEventListener("keydown", event => {
       if (event.key === "Enter" || event.key === " ") {
         event.preventDefault();
         fileInput.click();
       }
     });
-
-    fileInput.addEventListener("change", event => {
-      handleFile(event.target.files[0]);
-    });
+    fileInput.addEventListener("change", event => handleFile(event.target.files[0]));
 
     ["dragenter", "dragover"].forEach(eventName => {
       dropZone.addEventListener(eventName, event => {
@@ -822,9 +1751,7 @@ Terraform"></textarea>
       });
     });
 
-    dropZone.addEventListener("drop", event => {
-      handleFile(event.dataTransfer.files[0]);
-    });
+    dropZone.addEventListener("drop", event => handleFile(event.dataTransfer.files[0]));
   </script>
 </body>
 </html>
