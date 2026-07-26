@@ -1,1 +1,7 @@
 - Option "sens de la lecture". Case à cocher : sens de la lecture (de gauche à droite ou de haut en bas)
+- Option "masquer les mots à trouver" : si on la coche : les mots ne sont pas visibles
+- Grille cliquable : on doit sélectionner une suite de lettres dans n'importe quel sens y compris diagonales et ça doit être relativement ergonomique cad que si on déborde c'est pas grave, ça suit la ligne (horizontal, versical, diagonale à 45 degrés). Lorsqu'on a trouvé un des mots de la liste, il reste affiché en vert et le mot est rayé dans la liste. Il y a une petite animation pour indiquer qu'on a trouvé. Si le mot qu'on a sélectionné ne fait pas partie de la liste il y a un bref surlignement en rouge de ce qu'on a sélectionné et un message indique que ce mot n'est pas dans la liste
+- Autre format d'import : JSON structuré : tableau de mot et pour chaque mot il y a une brève explication en plus (quelques lignes). On peut charger soit un fichier json soit un texte brut. Le format précédent d'import (liste de mots simples reste valide). Si on charge le mauvaise format alors il y a un léger message d'erreur indiquant que le format n'est pas le bon. Lorsqu'on trouve un mot (via l'interaction définie dans le point précédent) alors un encart apparaît par dessus en mode popup avec le mot et l'explication associée 
+- export sous forme d'image
+- exoirt sous forme de texte : lettes monospacées + bloc de code Markdown
+- En bas du site : mettre le lien vers la chaîne Youtube et le dépôt Git
