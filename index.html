@@ -61,6 +61,22 @@
       align-items: start;
     }
 
+    main.shared-mode {
+      grid-template-columns: 1fr;
+    }
+
+    main.shared-mode .controls {
+      display: none;
+    }
+
+    main.shared-mode.controls-open {
+      grid-template-columns: minmax(300px, 430px) 1fr;
+    }
+
+    main.shared-mode.controls-open .controls {
+      display: block;
+    }
+
     .panel {
       background: var(--panel);
       border: 1px solid var(--border);
@@ -194,6 +210,27 @@
       margin-top: 18px;
     }
 
+    .share-zone {
+      margin-top: 16px;
+      padding: 14px;
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      background: #fcfcfd;
+    }
+
+    .share-zone h3 {
+      margin: 0;
+      font-size: 1rem;
+    }
+
+    .share-zone .actions {
+      margin-top: 10px;
+    }
+
+    .clear-action {
+      margin-top: 10px;
+    }
+
     button {
       border: 0;
       border-radius: 999px;
@@ -229,10 +266,41 @@
       color: var(--text);
     }
 
+    .settings-button {
+      display: none;
+      width: 46px;
+      height: 46px;
+      padding: 0;
+      flex: 0 0 auto;
+      place-items: center;
+      border: 1px solid var(--border);
+      background: #eef2f6;
+      color: var(--text);
+      font-size: 1.35rem;
+      line-height: 1;
+    }
+
+    main.shared-mode .settings-button {
+      display: grid;
+    }
+
     .messages {
       margin-top: 16px;
       display: grid;
       gap: 8px;
+    }
+
+    .shared-messages {
+      display: none;
+      margin: 0 0 16px;
+    }
+
+    main.shared-mode .shared-messages {
+      display: grid;
+    }
+
+    .shared-messages:empty {
+      display: none !important;
     }
 
     .message {
@@ -287,6 +355,12 @@
       border: 1px dashed var(--border);
       border-radius: 14px;
       padding: 32px;
+    }
+
+    .empty-state.error-state {
+      color: var(--danger);
+      border-color: #fecdca;
+      background: #fef3f2;
     }
 
     .puzzle-title {
@@ -515,7 +589,8 @@
     footer svg { width: 14px; height: 14px; fill: currentColor; }
 
     @media (max-width: 900px) {
-      main { grid-template-columns: 1fr; }
+      main,
+      main.shared-mode.controls-open { grid-template-columns: 1fr; }
       .controls { position: static; }
       :root { --cell: 30px; }
     }
@@ -531,7 +606,7 @@
     @media print {
       body { background: white; }
       header, .controls, .result-header, .messages, footer, .grid-instructions, .words-visibility-control, .modal { display: none !important; }
-      main { display: block; width: 100%; margin: 0; }
+      main, main.shared-mode, main.shared-mode.controls-open { display: block; width: 100%; margin: 0; }
       .result { border: none; box-shadow: none; padding: 0; overflow: visible; min-height: 0; }
       .panel { border: none; box-shadow: none; }
       :root { --cell: 28px; }
@@ -546,8 +621,8 @@
     <p>Importe une liste simple ou un fichier JSON enrichi, génère une grille, puis retrouve les mots directement à l’écran.</p>
   </header>
 
-  <main>
-    <section class="panel controls" aria-labelledby="controlsTitle">
+  <main id="appMain">
+    <section id="controlsPanel" class="panel controls" aria-labelledby="controlsTitle">
       <h2 id="controlsTitle">Liste de mots</h2>
 
       <div class="constraints">
@@ -555,6 +630,7 @@
         <ul>
           <li>entre 1 et 20 mots ;</li>
           <li>2 à 20 caractères par mot ;</li>
+          <li>explications limitées à 2 000 caractères max;</li>
           <li>accents et séparateurs supprimés automatiquement ;</li>
           <li>fichiers texte, CSV ou JSON acceptés.</li>
         </ul>
@@ -597,10 +673,20 @@ Terraform"></textarea>
       <div class="actions">
         <button id="generateBtn" class="btn-primary">Générer la grille</button>
         <button id="toggleSolutionBtn" class="btn-secondary" disabled>Afficher la solution</button>
-        <button id="exportImageBtn" class="btn-secondary" disabled>Exporter l’image</button>
-        <button id="exportTextBtn" class="btn-secondary" disabled>Exporter le texte</button>
-        <button id="copyBtn" class="btn-secondary" disabled>Copier en Markdown</button>
-        <button id="printBtn" class="btn-secondary" disabled>Imprimer</button>
+      </div>
+
+      <section class="share-zone" aria-labelledby="shareTitle">
+        <h3 id="shareTitle">Partager ma grille</h3>
+        <div class="actions">
+          <button id="exportImageBtn" class="btn-secondary" disabled>Exporter l’image</button>
+          <button id="exportTextBtn" class="btn-secondary" disabled>Exporter le texte</button>
+          <button id="copyBtn" class="btn-secondary" disabled>Copier en Markdown</button>
+          <button id="printBtn" class="btn-secondary" disabled>Imprimer</button>
+          <button id="shareLinkBtn" class="btn-secondary" disabled>Copier un lien de partage</button>
+        </div>
+      </section>
+
+      <div class="clear-action">
         <button id="clearBtn" class="btn-secondary">Effacer</button>
       </div>
 
@@ -613,7 +699,10 @@ Terraform"></textarea>
           <h2 id="resultTitle">Grille générée</h2>
           <div id="meta" class="meta"></div>
         </div>
+        <button id="settingsToggleBtn" class="settings-button" type="button" aria-controls="controlsPanel" aria-expanded="false" title="Afficher les paramètres" aria-label="Afficher les paramètres">⚙</button>
       </div>
+
+      <div id="sharedMessages" class="messages shared-messages" aria-live="polite"></div>
 
       <div id="output" class="empty-state">
         <div>
@@ -652,8 +741,20 @@ Terraform"></textarea>
     const MAX_WORD_LENGTH = 20;
     const MIN_WORDS = 1;
     const MAX_WORDS = 20;
+    const MAX_EXPLANATION_LENGTH = 2000;
     const MAX_GRID_SIZE = 40;
     const MAX_FILE_SIZE = 2 * 1024 * 1024;
+
+    // Limites spécifiques aux liens partagés.
+    // Le fragment #data= n'est pas envoyé au serveur, mais il reste non fiable :
+    // on limite donc sa taille avant décodage, après décodage et après décompression.
+    const SHARE_VERSION = 1;
+    const SHARE_FORMAT = "gz1";
+    const MAX_SHARE_DATA_LENGTH = 64000;
+    const MAX_COMPRESSED_SHARE_BYTES = 48000;
+    const MAX_DECOMPRESSED_SHARE_BYTES = 256 * 1024;
+    const MAX_SHARE_URL_LENGTH = 65000;
+
     const ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
 
     const ALL_DIRECTIONS = [
@@ -672,6 +773,8 @@ Terraform"></textarea>
       { dr: 1, dc: 0 }
     ];
 
+    const appMain = document.getElementById("appMain");
+    const controlsPanel = document.getElementById("controlsPanel");
     const wordsInput = document.getElementById("wordsInput");
     const dropZone = document.getElementById("dropZone");
     const fileInput = document.getElementById("fileInput");
@@ -684,8 +787,11 @@ Terraform"></textarea>
     const exportTextBtn = document.getElementById("exportTextBtn");
     const copyBtn = document.getElementById("copyBtn");
     const printBtn = document.getElementById("printBtn");
+    const shareLinkBtn = document.getElementById("shareLinkBtn");
     const clearBtn = document.getElementById("clearBtn");
+    const settingsToggleBtn = document.getElementById("settingsToggleBtn");
     const messages = document.getElementById("messages");
+    const sharedMessages = document.getElementById("sharedMessages");
     const output = document.getElementById("output");
     const meta = document.getElementById("meta");
     const result = document.getElementById("result");
@@ -698,6 +804,7 @@ Terraform"></textarea>
     let solutionVisible = false;
     let selectionState = createSelectionState();
     let previousModalFocus = null;
+    let sharedMode = false;
 
     function createSelectionState() {
       return {
@@ -726,6 +833,17 @@ Terraform"></textarea>
       return trimmed.startsWith("[") || trimmed.startsWith("{");
     }
 
+    function truncateExplanation(text) {
+      const chars = Array.from(text);
+      if (chars.length <= MAX_EXPLANATION_LENGTH) {
+        return { text, truncated: false };
+      }
+      return {
+        text: chars.slice(0, MAX_EXPLANATION_LENGTH).join(""),
+        truncated: true
+      };
+    }
+
     function parsePlainEntries(rawText) {
       return rawText
         .split(/[\s,;|]+/)
@@ -734,20 +852,7 @@ Terraform"></textarea>
         .map(item => ({ rawWord: item, explanation: "" }));
     }
 
-    function parseJsonEntries(rawText) {
-      let payload;
-
-      try {
-        payload = JSON.parse(rawText);
-      } catch (error) {
-        return {
-          entries: [],
-          errors: ["Le contenu ressemble à du JSON, mais sa syntaxe n’est pas valide."],
-          warnings: [],
-          format: "json"
-        };
-      }
-
+    function parseJsonPayload(payload) {
       const items = Array.isArray(payload)
         ? payload
         : payload && typeof payload === "object"
@@ -759,6 +864,7 @@ Terraform"></textarea>
           entries: [],
           errors: ["Le JSON doit être un tableau ou un objet contenant un tableau « mots »."],
           warnings: [],
+          softErrors: [],
           format: "json"
         };
       }
@@ -801,11 +907,31 @@ Terraform"></textarea>
       };
     }
 
+    function parseJsonEntries(rawText) {
+      let payload;
+
+      try {
+        payload = JSON.parse(rawText);
+      } catch (error) {
+        return {
+          entries: [],
+          errors: ["Le contenu ressemble à du JSON, mais sa syntaxe n’est pas valide."],
+          warnings: [],
+          softErrors: [],
+          format: "json"
+        };
+      }
+
+      return parseJsonPayload(payload);
+    }
+
     function validateEntries(rawEntries) {
       const errors = [];
       const warnings = [];
+      const softErrors = [];
       const entries = [];
       const seen = new Set();
+      let explanationTruncated = false;
 
       rawEntries.forEach(({ rawWord, explanation }) => {
         const normalized = normalizeWord(rawWord);
@@ -830,11 +956,16 @@ Terraform"></textarea>
           return;
         }
 
+        const truncated = truncateExplanation(explanation || "");
+        if (truncated.truncated) {
+          explanationTruncated = true;
+        }
+
         seen.add(normalized);
         entries.push({
           word: normalized,
           original: String(rawWord).trim(),
-          explanation: explanation || ""
+          explanation: truncated.text
         });
       });
 
@@ -846,7 +977,13 @@ Terraform"></textarea>
         errors.push(`Il y a ${entries.length} mots valides : maximum ${MAX_WORDS} mots.`);
       }
 
-      return { entries, errors, warnings };
+      if (explanationTruncated) {
+        softErrors.push(
+          `Certaines de vos explications sont trop longues, elles ont été tronquées (taille max des explications : ${MAX_EXPLANATION_LENGTH} caractères).`
+        );
+      }
+
+      return { entries, errors, warnings, softErrors };
     }
 
     function parseInput(rawText, forceJson = false) {
@@ -855,6 +992,7 @@ Terraform"></textarea>
           entries: [],
           errors: ["Saisis ou importe au moins un mot."],
           warnings: [],
+          softErrors: [],
           format: "plain"
         };
       }
@@ -1091,14 +1229,25 @@ Terraform"></textarea>
       setWordsListVisibility(!currentPuzzle.wordsListVisible);
     }
 
+    function setPuzzleButtonsEnabled(enabled) {
+      [
+        toggleSolutionBtn,
+        exportImageBtn,
+        exportTextBtn,
+        copyBtn,
+        printBtn,
+        shareLinkBtn
+      ].forEach(button => {
+        button.disabled = !enabled;
+      });
+    }
+
     function renderPuzzle(puzzle) {
       solutionVisible = false;
       selectionState = createSelectionState();
       result.classList.remove("solution-on");
       toggleSolutionBtn.textContent = "Afficher la solution";
-      [toggleSolutionBtn, exportImageBtn, exportTextBtn, copyBtn, printBtn].forEach(button => {
-        button.disabled = false;
-      });
+      setPuzzleButtonsEnabled(true);
 
       output.className = "";
       output.replaceChildren();
@@ -1166,7 +1315,6 @@ Terraform"></textarea>
       }
 
       updateWordsVisibilityButton();
-
       updateProgress();
     }
 
@@ -1371,7 +1519,7 @@ Terraform"></textarea>
       }]);
 
       if (matchedEntry.explanation) {
-        openExplanationModal(matchedEntry);
+        openModal(matchedEntry.word, matchedEntry.explanation);
       }
     }
 
@@ -1382,55 +1530,81 @@ Terraform"></textarea>
       }, duration);
     }
 
-    function openExplanationModal(entry) {
+    function openModal(title, text = "") {
       previousModalFocus = document.activeElement;
-      modalWord.textContent = entry.word;
-      modalExplanation.textContent = entry.explanation;
+      modalWord.textContent = title;
+      modalExplanation.textContent = text;
       explanationModal.hidden = false;
       document.body.classList.add("modal-open");
       modalClose.focus();
     }
 
-    function closeExplanationModal() {
+    function closeModal() {
       explanationModal.hidden = true;
       document.body.classList.remove("modal-open");
       previousModalFocus?.focus?.();
       previousModalFocus = null;
     }
 
-    function showMessages(items) {
-      messages.replaceChildren();
+    function renderMessagesIn(container, items) {
+      container.replaceChildren();
       items.forEach(item => {
-        messages.appendChild(createElement("div", `message ${item.type}`, item.text));
+        container.appendChild(createElement("div", `message ${item.type}`, item.text));
       });
     }
 
-    function generateFromInput() {
-      const { entries, errors, warnings, format } = parseInput(wordsInput.value);
-      const messageItems = [
-        ...errors.map(text => ({ type: "error", text })),
-        ...warnings.map(text => ({ type: "warning", text }))
-      ];
+    function showMessages(items) {
+      renderMessagesIn(messages, items);
+      if (sharedMode) {
+        renderMessagesIn(sharedMessages, items);
+      } else {
+        sharedMessages.replaceChildren();
+      }
+    }
 
-      if (errors.length) {
-        showMessages(messageItems);
-        return;
+    function buildParseMessages(parsed, includeSuccess = false) {
+      const items = [];
+      if (includeSuccess) {
+        items.push({
+          type: "success",
+          text: `Grille générée avec succès à partir du format ${parsed.format === "json" ? "JSON" : "texte"}.`
+        });
+      }
+      items.push(
+        ...parsed.errors.map(text => ({ type: "error", text })),
+        ...parsed.softErrors.map(text => ({ type: "error", text })),
+        ...parsed.warnings.map(text => ({ type: "warning", text }))
+      );
+      return items;
+    }
+
+    function generateFromParsed(parsed, options, { showSuccess = true } = {}) {
+      if (parsed.errors.length) {
+        showMessages(buildParseMessages(parsed, false));
+        return false;
       }
 
       try {
-        currentPuzzle = generatePuzzle(entries, {
-          readingOnly: readingDirectionOnly.checked,
-          hideWords: hideWords.checked,
-          sourceFormat: format
+        currentPuzzle = generatePuzzle(parsed.entries, {
+          readingOnly: Boolean(options.readingOnly),
+          hideWords: Boolean(options.hideWords),
+          sourceFormat: parsed.format
         });
         renderPuzzle(currentPuzzle);
-        showMessages([
-          { type: "success", text: `Grille générée avec succès à partir du format ${format === "json" ? "JSON" : "texte"}.` },
-          ...messageItems
-        ]);
+        showMessages(buildParseMessages(parsed, showSuccess));
+        return true;
       } catch (error) {
         showMessages([{ type: "error", text: error.message }]);
+        return false;
       }
+    }
+
+    function generateFromInput() {
+      const parsed = parseInput(wordsInput.value);
+      generateFromParsed(parsed, {
+        readingOnly: readingDirectionOnly.checked,
+        hideWords: hideWords.checked
+      });
     }
 
     function buildMarkdownExport() {
@@ -1494,24 +1668,31 @@ Terraform"></textarea>
       }
     }
 
+    async function copyTextToClipboard(text) {
+      if (navigator.clipboard?.writeText) {
+        try {
+          await navigator.clipboard.writeText(text);
+          return true;
+        } catch (error) {
+          // Certains navigateurs refusent l'API Clipboard selon le contexte.
+          // On tente alors le mécanisme de repli historique ci-dessous.
+        }
+      }
+      return copyTextFallback(text);
+    }
+
     async function copyMarkdownToClipboard() {
       if (!currentPuzzle) return;
       const markdown = buildMarkdownExport();
 
       try {
-        if (navigator.clipboard?.writeText) {
-          await navigator.clipboard.writeText(markdown);
-        } else if (!copyTextFallback(markdown)) {
-          throw new Error("Copie non disponible");
-        }
+        const copied = await copyTextToClipboard(markdown);
+        if (!copied) throw new Error("Copie non disponible");
         showMessages([{ type: "success", text: "Grille copiée en Markdown dans le presse-papiers." }]);
       } catch (error) {
-        const fallbackWorked = copyTextFallback(markdown);
         showMessages([{
-          type: fallbackWorked ? "success" : "error",
-          text: fallbackWorked
-            ? "Grille copiée en Markdown dans le presse-papiers."
-            : "Impossible de copier la grille dans le presse-papiers."
+          type: "error",
+          text: "Impossible de copier la grille dans le presse-papiers."
         }]);
       }
     }
@@ -1631,29 +1812,71 @@ Terraform"></textarea>
       }, "image/png");
     }
 
+    function enterSharedMode() {
+      sharedMode = true;
+      appMain.classList.add("shared-mode");
+      appMain.classList.remove("controls-open");
+      controlsPanel.setAttribute("aria-hidden", "true");
+      settingsToggleBtn.setAttribute("aria-expanded", "false");
+      settingsToggleBtn.setAttribute("aria-label", "Afficher les paramètres");
+      settingsToggleBtn.title = "Afficher les paramètres";
+    }
+
+    function exitSharedMode({ removeHash = false } = {}) {
+      sharedMode = false;
+      appMain.classList.remove("shared-mode", "controls-open");
+      controlsPanel.removeAttribute("aria-hidden");
+      settingsToggleBtn.setAttribute("aria-expanded", "false");
+      sharedMessages.replaceChildren();
+
+      if (removeHash && window.location.hash.startsWith("#data=")) {
+        const url = new URL(window.location.href);
+        url.hash = "";
+        window.history.replaceState(null, "", url.href);
+      }
+    }
+
+    function toggleControlsPanel() {
+      if (!sharedMode) return;
+      const opening = !appMain.classList.contains("controls-open");
+      appMain.classList.toggle("controls-open", opening);
+      controlsPanel.setAttribute("aria-hidden", String(!opening));
+      settingsToggleBtn.setAttribute("aria-expanded", String(opening));
+      settingsToggleBtn.setAttribute(
+        "aria-label",
+        opening ? "Masquer les paramètres" : "Afficher les paramètres"
+      );
+      settingsToggleBtn.title = opening ? "Masquer les paramètres" : "Afficher les paramètres";
+    }
+
+    function resetPuzzleDisplay() {
+      currentPuzzle = null;
+      solutionVisible = false;
+      selectionState = createSelectionState();
+      meta.textContent = "";
+      setPuzzleButtonsEnabled(false);
+      result.classList.remove("solution-on");
+      closeModal();
+      output.className = "empty-state";
+      output.replaceChildren();
+      const wrapper = document.createElement("div");
+      const strong = createElement("strong", "", "Aucune grille pour le moment.");
+      wrapper.appendChild(strong);
+      wrapper.appendChild(document.createElement("br"));
+      wrapper.appendChild(document.createTextNode("Ajoute des mots puis clique sur « Générer la grille »."));
+      output.appendChild(wrapper);
+    }
+
     function clearAll() {
       wordsInput.value = "";
       fileInput.value = "";
       fileName.textContent = "";
       readingDirectionOnly.checked = false;
       hideWords.checked = false;
-      currentPuzzle = null;
-      solutionVisible = false;
-      selectionState = createSelectionState();
-      meta.textContent = "";
       messages.replaceChildren();
-      [toggleSolutionBtn, exportImageBtn, exportTextBtn, copyBtn, printBtn].forEach(button => {
-        button.disabled = true;
-      });
-      result.classList.remove("solution-on");
-      closeExplanationModal();
-      output.className = "empty-state";
-      output.innerHTML = `
-        <div>
-          <strong>Aucune grille pour le moment.</strong><br />
-          Ajoute des mots puis clique sur « Générer la grille ».
-        </div>
-      `;
+      sharedMessages.replaceChildren();
+      exitSharedMode({ removeHash: true });
+      resetPuzzleDisplay();
     }
 
     function supportedFile(file) {
@@ -1696,6 +1919,7 @@ Terraform"></textarea>
               : `Fichier ${parsed.format === "json" ? "JSON" : "texte"} chargé avec succès.`
           },
           ...parsed.errors.map(text => ({ type: "error", text })),
+          ...parsed.softErrors.map(text => ({ type: "error", text })),
           ...parsed.warnings.map(text => ({ type: "warning", text }))
         ]);
       };
@@ -1703,6 +1927,320 @@ Terraform"></textarea>
         showMessages([{ type: "error", text: "Impossible de lire le fichier." }]);
       };
       reader.readAsText(file, "UTF-8");
+    }
+
+    function buildSharePayload() {
+      if (!currentPuzzle) {
+        throw new Error("Aucune grille à partager.");
+      }
+
+      return {
+        version: SHARE_VERSION,
+        options: {
+          sensLectureUniquement: Boolean(currentPuzzle.options.readingOnly),
+          masquerMots: Boolean(currentPuzzle.options.hideWords)
+        },
+        mots: currentPuzzle.entries.map(entry => ({
+          mot: entry.original || entry.word,
+          explication: entry.explanation || ""
+        }))
+      };
+    }
+
+    async function readStreamWithLimit(stream, maxBytes, tooLargeMessage) {
+      const reader = stream.getReader();
+      const chunks = [];
+      let total = 0;
+
+      try {
+        while (true) {
+          const { value, done } = await reader.read();
+          if (done) break;
+          if (!(value instanceof Uint8Array)) {
+            throw new Error("Flux de données invalide.");
+          }
+          total += value.byteLength;
+          if (total > maxBytes) {
+            await reader.cancel();
+            throw new Error(tooLargeMessage);
+          }
+          chunks.push(value);
+        }
+      } finally {
+        reader.releaseLock();
+      }
+
+      const result = new Uint8Array(total);
+      let offset = 0;
+      chunks.forEach(chunk => {
+        result.set(chunk, offset);
+        offset += chunk.byteLength;
+      });
+      return result;
+    }
+
+    async function compressTextToGzip(text) {
+      if (!("CompressionStream" in window)) {
+        throw new Error("Ce navigateur ne prend pas en charge la compression nécessaire aux liens de partage.");
+      }
+
+      const sourceBytes = new TextEncoder().encode(text);
+      if (sourceBytes.byteLength > MAX_DECOMPRESSED_SHARE_BYTES) {
+        throw new Error("La grille contient trop de données pour créer un lien de partage.");
+      }
+
+      const stream = new Blob([sourceBytes])
+        .stream()
+        .pipeThrough(new CompressionStream("gzip"));
+
+      return readStreamWithLimit(
+        stream,
+        MAX_COMPRESSED_SHARE_BYTES,
+        "La grille contient trop de données pour créer un lien de partage."
+      );
+    }
+
+    async function decompressGzipWithLimit(bytes) {
+      if (!("DecompressionStream" in window)) {
+        throw new Error("Ce navigateur ne prend pas en charge la décompression nécessaire à ce lien.");
+      }
+
+      const stream = new Blob([bytes])
+        .stream()
+        .pipeThrough(new DecompressionStream("gzip"));
+
+      return readStreamWithLimit(
+        stream,
+        MAX_DECOMPRESSED_SHARE_BYTES,
+        "Les données décompressées dépassent la taille maximale autorisée."
+      );
+    }
+
+    function bytesToBase64Url(bytes) {
+      let binary = "";
+      const chunkSize = 0x8000;
+      for (let i = 0; i < bytes.length; i += chunkSize) {
+        binary += String.fromCharCode(...bytes.subarray(i, i + chunkSize));
+      }
+      return btoa(binary)
+        .replace(/\+/g, "-")
+        .replace(/\//g, "_")
+        .replace(/=+$/g, "");
+    }
+
+    function base64UrlToBytes(encoded) {
+      if (!encoded || encoded.length > MAX_SHARE_DATA_LENGTH) {
+        throw new Error("Les données du lien sont trop volumineuses.");
+      }
+
+      if (!/^[A-Za-z0-9_-]+$/.test(encoded)) {
+        throw new Error("Le lien de partage contient des caractères invalides.");
+      }
+
+      const paddingLength = (4 - (encoded.length % 4)) % 4;
+      const base64 = encoded.replace(/-/g, "+").replace(/_/g, "/") + "=".repeat(paddingLength);
+
+      let binary;
+      try {
+        binary = atob(base64);
+      } catch (error) {
+        throw new Error("Le lien de partage est mal encodé.");
+      }
+
+      if (binary.length > MAX_COMPRESSED_SHARE_BYTES) {
+        throw new Error("Les données compressées du lien sont trop volumineuses.");
+      }
+
+      const bytes = new Uint8Array(binary.length);
+      for (let i = 0; i < binary.length; i++) {
+        bytes[i] = binary.charCodeAt(i);
+      }
+      return bytes;
+    }
+
+    function buildShareBaseUrl() {
+      const url = new URL(window.location.href);
+      url.hash = "";
+      return url.href;
+    }
+
+    async function createShareLink() {
+      const payload = buildSharePayload();
+      const json = JSON.stringify(payload);
+      const compressed = await compressTextToGzip(json);
+      const encoded = bytesToBase64Url(compressed);
+      const link = `${buildShareBaseUrl()}#data=${SHARE_FORMAT}.${encoded}`;
+
+      if (link.length > MAX_SHARE_URL_LENGTH) {
+        throw new Error("Le lien obtenu est trop long pour être partagé de manière fiable.");
+      }
+
+      return link;
+    }
+
+    async function copyShareLink() {
+      if (!currentPuzzle) return;
+      shareLinkBtn.disabled = true;
+
+      try {
+        const link = await createShareLink();
+        const copied = await copyTextToClipboard(link);
+        if (!copied) {
+          throw new Error("Impossible de copier le lien dans le presse-papiers.");
+        }
+        openModal("Lien de partage copié", "Le lien contient les mots et leurs explications éventuelles. Tu peux maintenant l’envoyer aux participants.");
+      } catch (error) {
+        showMessages([{
+          type: "error",
+          text: error instanceof Error ? error.message : "Impossible de créer le lien de partage."
+        }]);
+      } finally {
+        shareLinkBtn.disabled = false;
+      }
+    }
+
+    function getShareOptions(payload) {
+      const options = payload && typeof payload === "object" && !Array.isArray(payload)
+        ? payload.options
+        : null;
+
+      if (options === undefined || options === null) {
+        return { readingOnly: false, hideWords: false };
+      }
+
+      if (typeof options !== "object" || Array.isArray(options)) {
+        throw new Error("Les options du lien de partage sont invalides.");
+      }
+
+      const readingValue = options.sensLectureUniquement ?? options.readingOnly;
+      const hideValue = options.masquerMots ?? options.hideWords;
+
+      if (readingValue !== undefined && typeof readingValue !== "boolean") {
+        throw new Error("L’option de sens de lecture du lien est invalide.");
+      }
+      if (hideValue !== undefined && typeof hideValue !== "boolean") {
+        throw new Error("L’option de masquage des mots du lien est invalide.");
+      }
+
+      return {
+        readingOnly: Boolean(readingValue),
+        hideWords: Boolean(hideValue)
+      };
+    }
+
+    function parseSharedPayload(jsonText) {
+      let payload;
+      try {
+        payload = JSON.parse(jsonText);
+      } catch (error) {
+        throw new Error("Les données décompressées ne contiennent pas un JSON valide.");
+      }
+
+      if (!payload || (typeof payload !== "object" && !Array.isArray(payload))) {
+        throw new Error("Le contenu du lien de partage est invalide.");
+      }
+
+      if (!Array.isArray(payload) && payload.version !== undefined) {
+        if (!Number.isInteger(payload.version) || payload.version !== SHARE_VERSION) {
+          throw new Error("Cette version de lien de partage n’est pas prise en charge.");
+        }
+      }
+
+      const parsed = parseJsonPayload(payload);
+      if (parsed.errors.length) {
+        throw new Error(parsed.errors[0]);
+      }
+
+      const options = getShareOptions(payload);
+      return { parsed, options };
+    }
+
+    function canonicalJsonFromEntries(entries) {
+      return JSON.stringify(
+        entries.map(entry => ({
+          mot: entry.original || entry.word,
+          explication: entry.explanation || ""
+        })),
+        null,
+        2
+      );
+    }
+
+    function showSharedLoadError(message) {
+      showMessages([{ type: "error", text: message }]);
+      currentPuzzle = null;
+      meta.textContent = "";
+      setPuzzleButtonsEnabled(false);
+      output.className = "empty-state error-state";
+      output.replaceChildren();
+      const wrapper = document.createElement("div");
+      wrapper.appendChild(createElement("strong", "", "Impossible de charger la grille partagée."));
+      wrapper.appendChild(document.createElement("br"));
+      wrapper.appendChild(document.createTextNode(message));
+      output.appendChild(wrapper);
+    }
+
+    async function loadSharedDataFromHash() {
+      if (!window.location.hash.startsWith("#data=")) {
+        return false;
+      }
+
+      enterSharedMode();
+
+      try {
+        const rawData = window.location.hash.slice("#data=".length);
+        if (!rawData || rawData.length > MAX_SHARE_DATA_LENGTH) {
+          throw new Error("Les données du lien sont absentes ou trop volumineuses.");
+        }
+
+        const separatorIndex = rawData.indexOf(".");
+        if (separatorIndex <= 0) {
+          throw new Error("Le format du lien de partage est invalide.");
+        }
+
+        const format = rawData.slice(0, separatorIndex);
+        const encoded = rawData.slice(separatorIndex + 1);
+        if (format !== SHARE_FORMAT) {
+          throw new Error("Le format de compression de ce lien n’est pas pris en charge.");
+        }
+
+        const compressed = base64UrlToBytes(encoded);
+        const decompressed = await decompressGzipWithLimit(compressed);
+
+        let jsonText;
+        try {
+          jsonText = new TextDecoder("utf-8", { fatal: true }).decode(decompressed);
+        } catch (error) {
+          throw new Error("Les données du lien ne sont pas un texte UTF-8 valide.");
+        }
+
+        const { parsed, options } = parseSharedPayload(jsonText);
+
+        readingDirectionOnly.checked = options.readingOnly;
+        hideWords.checked = options.hideWords;
+        wordsInput.value = canonicalJsonFromEntries(parsed.entries);
+        fileInput.value = "";
+        fileName.textContent = "Grille chargée depuis un lien de partage.";
+
+        const generated = generateFromParsed(parsed, options, { showSuccess: false });
+        if (!generated) {
+          throw new Error("Impossible de générer la grille à partir du lien partagé.");
+        }
+
+        // En mode partagé, on n'affiche rien si tout va bien. En revanche les
+        // erreurs non bloquantes (par exemple une explication tronquée) restent visibles.
+        const nonBlockingMessages = [
+          ...parsed.softErrors.map(text => ({ type: "error", text })),
+          ...parsed.warnings.map(text => ({ type: "warning", text }))
+        ];
+        showMessages(nonBlockingMessages);
+        return true;
+      } catch (error) {
+        showSharedLoadError(
+          error instanceof Error ? error.message : "Le lien de partage est invalide."
+        );
+        return false;
+      }
     }
 
     generateBtn.addEventListener("click", generateFromInput);
@@ -1718,14 +2256,16 @@ Terraform"></textarea>
     exportTextBtn.addEventListener("click", exportTextFile);
     copyBtn.addEventListener("click", copyMarkdownToClipboard);
     printBtn.addEventListener("click", () => window.print());
+    shareLinkBtn.addEventListener("click", copyShareLink);
     clearBtn.addEventListener("click", clearAll);
+    settingsToggleBtn.addEventListener("click", toggleControlsPanel);
 
-    modalClose.addEventListener("click", closeExplanationModal);
+    modalClose.addEventListener("click", closeModal);
     explanationModal.addEventListener("click", event => {
-      if (event.target === explanationModal) closeExplanationModal();
+      if (event.target === explanationModal) closeModal();
     });
     document.addEventListener("keydown", event => {
-      if (event.key === "Escape" && !explanationModal.hidden) closeExplanationModal();
+      if (event.key === "Escape" && !explanationModal.hidden) closeModal();
     });
 
     dropZone.addEventListener("click", () => fileInput.click());
@@ -1752,6 +2292,10 @@ Terraform"></textarea>
     });
 
     dropZone.addEventListener("drop", event => handleFile(event.dataTransfer.files[0]));
+
+    // Le chargement du fragment se fait après l'installation de tous les handlers.
+    // Les données sont traitées comme non fiables et ne sont jamais injectées avec innerHTML.
+    loadSharedDataFromHash();
   </script>
 </body>
 </html>
