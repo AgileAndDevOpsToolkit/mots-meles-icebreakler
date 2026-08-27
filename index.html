@@ -617,13 +617,12 @@
 </head>
 <body>
   <header>
-    <h1>Générateur de mots mêlés</h1>
-    <p>Importe une liste simple ou un fichier JSON enrichi, génère une grille, puis retrouve les mots directement à l’écran.</p>
+    <h1>Mots mêlés</h1>
   </header>
 
   <main id="appMain">
     <section id="controlsPanel" class="panel controls" aria-labelledby="controlsTitle">
-      <h2 id="controlsTitle">Liste de mots</h2>
+      <h2 id="controlsTitle">Générez votre propre grille</h2>
 
       <div class="constraints">
         <strong>Contraintes appliquées :</strong>
@@ -693,12 +692,8 @@ Terraform"></textarea>
       <div id="messages" class="messages" aria-live="polite"></div>
     </section>
 
-    <section id="result" class="panel result" aria-labelledby="resultTitle">
+    <section id="result" class="panel result" aria-label="Grille générée">
       <div class="result-header">
-        <div>
-          <h2 id="resultTitle">Grille générée</h2>
-          <div id="meta" class="meta"></div>
-        </div>
         <button id="settingsToggleBtn" class="settings-button" type="button" aria-controls="controlsPanel" aria-expanded="false" title="Afficher les paramètres" aria-label="Afficher les paramètres">⚙</button>
       </div>
 
@@ -793,7 +788,6 @@ Terraform"></textarea>
     const messages = document.getElementById("messages");
     const sharedMessages = document.getElementById("sharedMessages");
     const output = document.getElementById("output");
-    const meta = document.getElementById("meta");
     const result = document.getElementById("result");
     const explanationModal = document.getElementById("explanationModal");
     const modalWord = document.getElementById("modalWord");
@@ -1252,15 +1246,6 @@ Terraform"></textarea>
       output.className = "";
       output.replaceChildren();
 
-      output.appendChild(createElement("h2", "puzzle-title", "Mots mêlés"));
-      output.appendChild(createElement(
-        "p",
-        "puzzle-subtitle",
-        puzzle.wordsListVisible
-          ? `Sélectionne les ${puzzle.words.length} mots cachés dans la grille.`
-          : `Retrouve les ${puzzle.words.length} mots cachés dans la grille.`
-      ));
-
       const progress = createElement("p", "progress");
       progress.id = "progress";
       output.appendChild(progress);
@@ -1326,9 +1311,6 @@ Terraform"></textarea>
       if (progress) {
         progress.textContent = `Mots trouvés : ${foundCount} / ${total}`;
       }
-      const directionText = currentPuzzle.options.readingOnly ? "sens de lecture" : "8 directions";
-      const listText = currentPuzzle.wordsListVisible ? "" : ", liste masquée";
-      meta.textContent = `${total} mot(s), grille ${currentPuzzle.size} × ${currentPuzzle.size}, ${directionText}${listText}`;
     }
 
     function getCellElement(row, col) {
@@ -1853,7 +1835,6 @@ Terraform"></textarea>
       currentPuzzle = null;
       solutionVisible = false;
       selectionState = createSelectionState();
-      meta.textContent = "";
       setPuzzleButtonsEnabled(false);
       result.classList.remove("solution-on");
       closeModal();
@@ -2169,7 +2150,6 @@ Terraform"></textarea>
     function showSharedLoadError(message) {
       showMessages([{ type: "error", text: message }]);
       currentPuzzle = null;
-      meta.textContent = "";
       setPuzzleButtonsEnabled(false);
       output.className = "empty-state error-state";
       output.replaceChildren();
