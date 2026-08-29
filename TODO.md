@@ -4,6 +4,7 @@
 - Mauvais format JSON : rendre le message d'erreur plus visible
 - Bien relire le readme
 - Pouvoir scroller la page même si la souris se trouve dans la zone de la grille de mots
+- Mettre des exemples de fichiers JSON de mots dans le dépôt GitHub ? (à réfléchir)
 
 # DONE
 
